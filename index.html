@@ -169,6 +169,7 @@
   </style>
   <style>@view-transition { navigation: auto; }</style>
   <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="./auth.js" type="text/javascript"></script>
  </head>
  <body>
   <div id="root"></div>
@@ -468,11 +469,9 @@
       const [showCoachLogin, setShowCoachLogin] = useState(false);
       const [loginEmail, setLoginEmail] = useState("");
       const [loginCode, setLoginCode] = useState("");
-      const [generatedCode, setGeneratedCode] = useState("");
       const [loginError, setLoginError] = useState("");
-      const [loginAttempts, setLoginAttempts] = useState(parseInt(localStorage.getItem("coachLoginAttempts") || "0"));
-      const [lockUntil, setLockUntil] = useState(parseInt(localStorage.getItem("coachLockUntil") || "0"));
-      const [codeValidationMessage, setCodeValidationMessage] = useState("");const [newCodeName, setNewCodeName] = useState("");
+      const [codeValidationMessage, setCodeValidationMessage] = useState("");
+      const [newCodeName, setNewCodeName] = useState("");
       const [newCodeType, setNewCodeType] = useState("");
       const [newCodeValue, setNewCodeValue] = useState("");
       const [newCodeAssignedEmail, setNewCodeAssignedEmail] = useState("");
@@ -1167,37 +1166,21 @@ Cette réservation est confirmée.`;
         }
       }, []);
 
-  const handleValidateCode = () => {
-  const savedCode = localStorage.getItem("coachLoginCode");
-  const expiresAt = parseInt(localStorage.getItem("coachLoginExpires") || "0", 10);
-  const now = Date.now();
+      // --- Auth Coach (isolée dans auth.js) ---
+      const handleValidateCode = () => {
+        const result = window.CoachAuth?.validateLoginCode(loginCode);
 
-  if (!savedCode || !expiresAt) {
-    setLoginError("Aucun code trouvé. Demande un nouveau code.");
-    return;
-  }
+        if (!result?.ok) {
+          setLoginError(result?.error || "Erreur de connexion");
+          return;
+        }
 
-  if (now > expiresAt) {
-    setLoginError("Le code a expiré. Demande un nouveau code.");
-    localStorage.removeItem("coachLoginCode");
-    localStorage.removeItem("coachLoginExpires");
-    return;
-  }
-
-  if (loginCode !== savedCode) {
-    setLoginError("Code incorrect");
-    return;
-  }
-
-  // ✅ Connexion validée
-  localStorage.setItem("isCoachLoggedIn", "true");
-  localStorage.removeItem("coachLoginCode");
-  localStorage.removeItem("coachLoginExpires");
-
-  setCoachMode(true);
-  setShowCoachLogin(false);
-  setLoginError("");
-};
+        // ✅ Connexion validée (comportement actuel inchangé)
+        window.CoachAuth?.markLoggedIn();
+        setCoachMode(true);
+        setShowCoachLogin(false);
+        setLoginError("");
+      };
 
       if (showSplash) {
         return (
@@ -1250,6 +1233,12 @@ Cette réservation est confirmée.`;
             <label className="block mb-2" style={{ color: config.text_color }}>
               Email
             </label>
+            {/* FUTUR — Mot de passe oublié (Firebase/Supabase):
+                - Ajouter ici un lien/bouton "Mot de passe oublié ?" (sans changer le design actuel),
+                  qui appellera une action type CoachAuth.requestPasswordReset(loginEmail).
+                - Firebase: sendPasswordResetEmail(...)
+                - Supabase: supabase.auth.resetPasswordForEmail(...)
+            */}
             <input
               type="email"
               value={loginEmail}
@@ -1315,7 +1304,7 @@ Cette réservation est confirmée.`;
                   <button
                     onClick={() => {
                       setCoachMode(false);
-                      localStorage.removeItem('isCoachLoggedIn');
+                      window.CoachAuth?.logout();
                     }}
                     className="px-4 py-2 rounded-lg glass hover:neon-border transition-all"
                     style={{
@@ -2453,40 +2442,6 @@ Cette réservation est confirmée.`;
         );
       }
 
-
-  
-const handleValidateCode = () => {
-  const savedCode = localStorage.getItem("coachLoginCode");
-  const expiresAt = parseInt(localStorage.getItem("coachLoginExpires") || "0", 10);
-  const now = Date.now();
-
-  if (!savedCode || !expiresAt) {
-    setLoginError("Aucun code trouvé. Demande un nouveau code.");
-    return;
-  }
-
-  if (now > expiresAt) {
-    setLoginError("Le code a expiré. Demande un nouveau code.");
-    localStorage.removeItem("coachLoginCode");
-    localStorage.removeItem("coachLoginExpires");
-    return;
-  }
-
-  if (loginCode !== savedCode) {
-    setLoginError("Code incorrect");
-    return;
-  }
-
-  // ✅ Connexion validée
-  localStorage.setItem("isCoachLoggedIn", "true");
-  localStorage.removeItem("coachLoginCode");
-  localStorage.removeItem("coachLoginExpires");
-
-  setCoachMode(true);
-  setShowCoachLogin(false);
-  setLoginError("");
-};
-
       const visibleOffers = offers.filter(o => o.visible !== false);
       const uniqueUsers = Array.from(new Map(users.map(u => [u.email, u])).values());
       const currentSelectedUserEmail = uniqueUsers.find(u => u.id === selectedUserId)?.email || userEmail;
@@ -3255,7 +3210,7 @@ const handleValidateCode = () => {
               className="mt-12 mb-8 text-center"
               style={{ cursor: 'pointer', userSelect: 'none' }}
               onDoubleClick={() => {
-                if (localStorage.getItem("isCoachLoggedIn") === "true") {
+                if (window.CoachAuth?.isLoggedIn()) {
                   setCoachMode(true);
                 } else {
                   setShowCoachLogin(true);
