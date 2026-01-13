@@ -405,6 +405,7 @@
       } catch {}
     };
 
+  
     function getNextOccurrences(weekday, count = 4) {
       const now = new Date();
       const results = [];
@@ -465,37 +466,26 @@
       const [coachMode, setCoachMode] = useState(false);
       const [coachTab, setCoachTab] = useState("reservations");
       const [showCoachLogin, setShowCoachLogin] = useState(false);
-
-      // Login (coach) - champs actuels (on améliorera à l'étape 2)
       const [loginEmail, setLoginEmail] = useState("");
       const [loginCode, setLoginCode] = useState("");
+      const [generatedCode, setGeneratedCode] = useState("");
       const [loginError, setLoginError] = useState("");
-
-      // Sécurité anti-spam (conservé)
       const [loginAttempts, setLoginAttempts] = useState(parseInt(localStorage.getItem("coachLoginAttempts") || "0"));
       const [lockUntil, setLockUntil] = useState(parseInt(localStorage.getItem("coachLockUntil") || "0"));
-
-      // Messages
-      const [codeValidationMessage, setCodeValidationMessage] = useState("");
-
-      // Codes promo (FIX: newCodeExpiresAt manquait -> écran blanc)
-      const [newCodeName, setNewCodeName] = useState("");
+      const [codeValidationMessage, setCodeValidationMessage] = useState("");const [newCodeName, setNewCodeName] = useState("");
       const [newCodeType, setNewCodeType] = useState("");
       const [newCodeValue, setNewCodeValue] = useState("");
       const [newCodeAssignedEmail, setNewCodeAssignedEmail] = useState("");
       const [newCodeBulkCount, setNewCodeBulkCount] = useState(1);
-      const [newCodeExpiresAt, setNewCodeExpiresAt] = useState("");
+      const [codeExpiresAt, setCodeExpiresAt] = useState(0);
       const [newCodeCourses, setNewCodeCourses] = useState([]);
       const [newCodeMaxUses, setNewCodeMaxUses] = useState("");
-
-      // Dernière réservation
       const [lastBookedEmail, setLastBookedEmail] = useState("");
       const [lastBookedName, setLastBookedName] = useState("");
       const [lastBookedCourse, setLastBookedCourse] = useState("");
       const [lastBookedOffer, setLastBookedOffer] = useState("");
       const [lastBookedPrice, setLastBookedPrice] = useState("");
       const [lastBookedDate, setLastBookedDate] = useState("");
-
       const [showConfirmPayment, setShowConfirmPayment] = useState(false);
       const [pendingReservation, setPendingReservation] = useState(null);
       const [copiedCode, setCopiedCode] = useState(null);
@@ -607,17 +597,42 @@
         localStorage.setItem("af_pwa_prompted", "true");
       };
 
-      useEffect(() => { save("af_reservations", reservations); }, [reservations]);
-      useEffect(() => { save("af_users", users); }, [users]);
-      useEffect(() => { save("af_offers", offers); }, [offers]);
-      useEffect(() => { save("af_courses", courses); }, [courses]);
-      useEffect(() => { save("af_payment_links", paymentLinks); }, [paymentLinks]);
-      useEffect(() => { save("afroboost_discountCodes", discountCodes); }, [discountCodes]);
-      useEffect(() => { save("af_concept", concept); }, [concept]);
-      useEffect(() => { save("af_config", config); }, [config]);
+      useEffect(() => {
+        save("af_reservations", reservations);
+      }, [reservations]);
 
       useEffect(() => {
-        const timer = setTimeout(() => setShowSplash(false), 1500);
+        save("af_users", users);
+      }, [users]);
+
+      useEffect(() => {
+        save("af_offers", offers);
+      }, [offers]);
+
+      useEffect(() => {
+        save("af_courses", courses);
+      }, [courses]);
+
+      useEffect(() => {
+        save("af_payment_links", paymentLinks);
+      }, [paymentLinks]);
+
+      useEffect(() => {
+        save("afroboost_discountCodes", discountCodes);
+      }, [discountCodes]);
+
+      useEffect(() => {
+        save("af_concept", concept);
+      }, [concept]);
+
+      useEffect(() => {
+        save("af_config", config);
+      }, [config]);
+
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          setShowSplash(false);
+        }, 1500);
         return () => clearTimeout(timer);
       }, []);
 
@@ -675,6 +690,10 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
         }, target === "coach" ? 500 : 1500);
       };
 
+
+
+
+
       const isDiscountGratuit = (code) => {
         return code && (code.type === "100%" || (code.type === "%" && parseFloat(code.value) >= 100));
       };
@@ -686,6 +705,7 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
         let finalUserName, finalUserEmail, finalUserWhatsapp, finalUserId;
         let appliedDiscount = null;
 
+        // Validation email et whatsapp obligatoires
         const checkEmail = isExistingUser ? users.find(u => u.id === selectedUserId)?.email : userEmail;
         const checkWhatsapp = isExistingUser ? users.find(u => u.id === selectedUserId)?.whatsapp : userWhatsapp;
 
@@ -713,6 +733,7 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
               setTimeout(() => setCodeValidationMessage(""), 3000);
               return;
             }
+            
             if (code.assignedEmail && code.assignedEmail !== checkEmail) {
               setCodeValidationMessage("Ce code promo n'est pas attribué à ton compte.");
               setTimeout(() => setCodeValidationMessage(""), 3000);
@@ -766,7 +787,9 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
           appliedDiscount: appliedDiscount
         };
 
+        // CAS ABONNÉ RÉSERVATION GRATUITE (Contrôles Bug 1 & 2)
         if (isExistingUser && appliedDiscount && isDiscountGratuit(appliedDiscount)) {
+          // Double vérification de sécurité sur l'email assigné
           if (appliedDiscount.assignedEmail && appliedDiscount.assignedEmail !== finalUserEmail) {
             setCodeValidationMessage("Ce code gratuit n'est pas associé à cet email.");
             setTimeout(() => setCodeValidationMessage(""), 3000);
@@ -803,6 +826,7 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
           return;
         }
 
+        // CAS NORMAL : Paiement Obligatoire (Fix Bug 1)
         setPendingReservation(tempReservation);
         if (!isExistingUser) {
           setUsers([...users, { id: finalUserId, name: finalUserName, email: finalUserEmail, whatsapp: finalUserWhatsapp, createdAt: new Date().toISOString() }]);
@@ -864,6 +888,7 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
         setShowConfirmPayment(false);
         resetForm();
       };
+
       const handleAddDiscountCode = (e) => {
         e.preventDefault();
         if (!newCodeType || !newCodeValue) return;
@@ -986,7 +1011,9 @@ ${reservation.discountCode ? `🎟️ Code promo : ${reservation.discountCode}` 
         URL.revokeObjectURL(url);
       };
 
-      const handlePrintProof = () => window.print();
+      const handlePrintProof = () => {
+        window.print();
+      };
 
       const handleShareWhatsApp = () => {
         const message = `🎧 CONFIRMATION DE RÉSERVATION AFROBOOST
@@ -1009,7 +1036,9 @@ Cette réservation est confirmée.`;
       const handleCopyCode = (code) => {
         navigator.clipboard.writeText(code.code).then(() => {
           setCopiedCode(code.id);
-          setTimeout(() => setCopiedCode(null), 2000);
+          setTimeout(() => {
+            setCopiedCode(null);
+          }, 2000);
         });
       };
 
@@ -1138,37 +1167,37 @@ Cette réservation est confirmée.`;
         }
       }, []);
 
-      // ✅ GARDER UNE SEULE FOIS (fix doublon)
-      const handleValidateCode = () => {
-        const savedCode = localStorage.getItem("coachLoginCode");
-        const expiresAt = parseInt(localStorage.getItem("coachLoginExpires") || "0", 10);
-        const now = Date.now();
+  const handleValidateCode = () => {
+  const savedCode = localStorage.getItem("coachLoginCode");
+  const expiresAt = parseInt(localStorage.getItem("coachLoginExpires") || "0", 10);
+  const now = Date.now();
 
-        if (!savedCode || !expiresAt) {
-          setLoginError("Aucun code trouvé. Demande un nouveau code.");
-          return;
-        }
+  if (!savedCode || !expiresAt) {
+    setLoginError("Aucun code trouvé. Demande un nouveau code.");
+    return;
+  }
 
-        if (now > expiresAt) {
-          setLoginError("Le code a expiré. Demande un nouveau code.");
-          localStorage.removeItem("coachLoginCode");
-          localStorage.removeItem("coachLoginExpires");
-          return;
-        }
+  if (now > expiresAt) {
+    setLoginError("Le code a expiré. Demande un nouveau code.");
+    localStorage.removeItem("coachLoginCode");
+    localStorage.removeItem("coachLoginExpires");
+    return;
+  }
 
-        if (loginCode !== savedCode) {
-          setLoginError("Code incorrect");
-          return;
-        }
+  if (loginCode !== savedCode) {
+    setLoginError("Code incorrect");
+    return;
+  }
 
-        localStorage.setItem("isCoachLoggedIn", "true");
-        localStorage.removeItem("coachLoginCode");
-        localStorage.removeItem("coachLoginExpires");
+  // ✅ Connexion validée
+  localStorage.setItem("isCoachLoggedIn", "true");
+  localStorage.removeItem("coachLoginCode");
+  localStorage.removeItem("coachLoginExpires");
 
-        setCoachMode(true);
-        setShowCoachLogin(false);
-        setLoginError("");
-      };
+  setCoachMode(true);
+  setShowCoachLogin(false);
+  setLoginError("");
+};
 
       if (showSplash) {
         return (
@@ -1179,78 +1208,1284 @@ Cette réservation est confirmée.`;
         );
       }
 
-      if (showCoachLogin) {
+     if (showCoachLogin) {
+  return (
+    <div className="w-full min-h-full flex items-center justify-center p-6">
+      <div className="glass rounded-xl p-6 max-w-md w-full">
+        <form onSubmit={(e) => e.preventDefault()}>
+
+          {/* 🔢 Champ code reçu par email */}
+          <div className="mb-4">
+            <label className="block mb-2" style={{ color: config.text_color }}>
+              Code reçu par email
+            </label>
+            <input
+              type="text"
+              value={loginCode}
+              onChange={(e) => setLoginCode(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg glass"
+              placeholder="123456"
+            />
+          </div>
+
+          {/* ✅ Bouton valider le code */}
+          <button
+            type="button"
+            onClick={handleValidateCode}
+            className="btn-primary w-full py-3 rounded-lg font-bold mb-3"
+          >
+            Valider le code
+          </button>
+
+          {loginError && (
+            <div
+              className="mb-4 p-3 rounded-lg text-center"
+              style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
+            >
+              {loginError}
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label className="block mb-2" style={{ color: config.text_color }}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg glass"
+              placeholder="coach@afroboost.com"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="btn-primary w-full py-3 rounded-lg font-bold mb-3"
+          >
+            Se connecter
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowCoachLogin(false)}
+            className="w-full py-2 rounded-lg glass"
+            style={{ color: config.text_color }}
+          >
+            Annuler
+          </button>
+
+        </form>
+      </div>
+    </div>
+  );
+}
+
+      if (coachMode) {
         return (
-          <div className="w-full min-h-full flex items-center justify-center p-6">
-            <div className="glass rounded-xl p-6 max-w-md w-full">
-              <form onSubmit={(e) => e.preventDefault()}>
-                <div className="mb-4">
-                  <label className="block mb-2" style={{ color: config.text_color }}>
-                    Code reçu par email
-                  </label>
-                  <input
-                    type="text"
-                    value={loginCode}
-                    onChange={(e) => setLoginCode(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg glass"
-                    placeholder="123456"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleValidateCode}
-                  className="btn-primary w-full py-3 rounded-lg font-bold mb-3"
+          <div 
+            className="w-full min-h-full p-6"
+            style={{ 
+              background: `radial-gradient(circle at top, ${config.gradient_color} 0%, ${config.background_color} 45%)`,
+              fontFamily: `${config.font_family}, system-ui, sans-serif`
+            }}
+          >
+            <div className="max-w-6xl mx-auto">
+              <div className="flex justify-between items-center mb-8">
+                <h1 
+                  className="font-bold"
+                  style={{ 
+                    color: config.text_color,
+                    fontSize: `${config.font_size * 2}px`
+                  }}
                 >
-                  Valider le code
-                </button>
-
-                {loginError && (
-                  <div
-                    className="mb-4 p-3 rounded-lg text-center"
-                    style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
+                  Mode Coach
+                </h1>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setCoachMode(false)}
+                    className="px-4 py-2 rounded-lg glass hover:neon-border transition-all"
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size}px`
+                    }}
                   >
-                    {loginError}
-                  </div>
-                )}
-
-                <div className="mb-4">
-                  <label className="block mb-2" style={{ color: config.text_color }}>
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg glass"
-                    placeholder="coach@afroboost.com"
-                  />
+                    ← Retour
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCoachMode(false);
+                      localStorage.removeItem('isCoachLoggedIn');
+                    }}
+                    className="px-4 py-2 rounded-lg glass hover:neon-border transition-all"
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size}px`
+                    }}
+                  >
+                    🚪 Déconnexion
+                  </button>
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  className="btn-primary w-full py-3 rounded-lg font-bold mb-3"
-                >
-                  Se connecter
-                </button>
+              <div className="flex gap-2 mb-6 flex-wrap">
+                {["reservations", "concept", "courses", "offers", "payments", "codes"].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setCoachTab(tab)}
+                    className={`px-4 py-2 rounded-lg transition-all ${
+                      coachTab === tab ? 'neon-border' : 'glass'
+                    }`}
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size}px`,
+                      background: coachTab === tab ? 'rgba(217, 28, 210, 0.3)' : undefined
+                    }}
+                  >
+                    {tab === "reservations" ? "Réservations" : 
+                     tab === "concept" ? "Concept & Visuel" :
+                     tab === "courses" ? "Cours" :
+                     tab === "offers" ? "Offres" : 
+                     tab === "payments" ? "Paiements" : "Codes promo"}
+                  </button>
+                ))}
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowCoachLogin(false)}
-                  className="w-full py-2 rounded-lg glass"
-                  style={{ color: config.text_color }}
-                >
-                  Annuler
-                </button>
-              </form>
+              {coachTab === "concept" && (
+                <div className="glass rounded-xl p-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    Concept Afroboost & visuel d'accueil
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label 
+                        htmlFor="conceptDescription"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Description du concept
+                      </label>
+                      <textarea
+                        id="conceptDescription"
+                        value={concept.description}
+                        onChange={(e) => setConcept({...concept, description: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        rows={4}
+                        placeholder="Décrivez le concept Afroboost..."
+                      />
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="heroImageUrl"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        URL de l'image d'accueil (hero)
+                      </label>
+                      <input
+                        id="heroImageUrl"
+                        type="url"
+                        value={concept.heroImageUrl}
+                        onChange={(e) => setConcept({...concept, heroImageUrl: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://..."
+                      />
+                      <ImageWithDimensions imageUrl={concept.heroImageUrl} alt="Aperçu hero" config={config} />
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="faviconUrl"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        URL du favicon (icône d'onglet)
+                      </label>
+                      <input
+                        id="faviconUrl"
+                        type="url"
+                        value={faviconUrl}
+                        onChange={(e) => setFaviconUrl(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://..."
+                      />
+                      <p 
+                        className="mt-2"
+                        style={{ 
+                          color: config.text_color,
+                          opacity: 0.6,
+                          fontSize: `${config.font_size * 0.75}px`
+                        }}
+                      >
+                        💡 Le favicon apparaîtra dans l'onglet du navigateur et comme icône PWA
+                      </p>
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="heroVideoUrl"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        URL de la vidéo d'accueil (YouTube, TikTok, etc.)
+                      </label>
+                      <input
+                        id="heroVideoUrl"
+                        type="url"
+                        value={concept.heroVideoUrl}
+                        onChange={(e) => setConcept({...concept, heroVideoUrl: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://youtube.com/... ou https://tiktok.com/..."
+                      />
+                      <p 
+                        className="mt-2"
+                        style={{ 
+                          color: config.text_color,
+                          opacity: 0.6,
+                          fontSize: `${config.font_size * 0.75}px`
+                        }}
+                      >
+                        Note : La vidéo sera affichée en priorité si les deux (image et vidéo) sont renseignés.
+                      </p>
+                    </div>
+
+                    <div 
+                      className="p-4 rounded-lg"
+                      style={{ 
+                        background: 'rgba(139, 92, 246, 0.2)',
+                        borderLeft: `4px solid ${config.secondary_color}`
+                      }}
+                    >
+                      <p 
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size * 0.875}px`
+                        }}
+                      >
+                        💡 <strong>Astuce :</strong> Le visuel d'accueil apparaîtra juste sous la description du concept sur la page principale. Il est automatiquement sauvegardé lorsque vous modifiez les champs.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {coachTab === "reservations" && (
+                <div className="glass rounded-xl p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 
+                      className="font-semibold"
+                      style={{ 
+                        color: config.text_color,
+                        fontSize: `${config.font_size * 1.5}px`
+                      }}
+                    >
+                      Liste des réservations
+                    </h2>
+                    <button
+                      onClick={exportUsersCSV}
+                      className="px-4 py-2 rounded-lg btn-primary font-medium hover:scale-105 transition-all"
+                      style={{
+                        fontSize: `${config.font_size * 0.875}px`
+                      }}
+                    >
+                      📥 Télécharger CSV
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(148, 27, 181, 0.4)' }}>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Code</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Nom</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Email</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>WhatsApp</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Cours</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Date/Heure</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Offre</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Qté</th>
+                          <th className="text-left p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reservations.map(res => (
+                          <tr key={res.id} style={{ borderBottom: '1px solid rgba(148, 27, 181, 0.2)' }}>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.75}px`, fontWeight: 'bold' }}>{res.reservationCode || '-'}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.userName}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.userEmail}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.userWhatsapp || '-'}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.courseName}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>
+                              {new Date(res.datetime).toLocaleDateString('fr-CH', {weekday: 'short', day: '2-digit', month: '2-digit'})} • {new Date(res.datetime).toLocaleTimeString('fr-CH', {hour: '2-digit', minute: '2-digit'})}
+                            </td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.offerName}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px` }}>{res.quantity || 1}</td>
+                            <td className="p-3" style={{ color: config.text_color, fontSize: `${config.font_size * 0.875}px`, fontWeight: 'bold' }}>CHF {res.totalPrice || res.price}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {reservations.length === 0 && (
+                      <p className="text-center py-8" style={{ color: config.text_color, opacity: 0.6, fontSize: `${config.font_size}px` }}>
+                        Aucune réservation pour le moment
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {coachTab === "courses" && (
+                <div className="glass rounded-xl p-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    Gestion des cours
+                  </h2>
+                  <div className="space-y-6">
+                    {courses.map((course, idx) => (
+                      <div key={course.id} className="glass rounded-lg p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Nom du cours
+                            </label>
+                            <input
+                              type="text"
+                              value={course.name}
+                              onChange={(e) => {
+                                const newCourses = [...courses];
+                                newCourses[idx].name = e.target.value;
+                                setCourses(newCourses);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Jour de la semaine
+                            </label>
+                            <select
+                              value={course.weekday}
+                              onChange={(e) => {
+                                const newCourses = [...courses];
+                                newCourses[idx].weekday = parseInt(e.target.value);
+                                setCourses(newCourses);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                            >
+                              {WEEKDAYS.map(day => (
+                                <option key={day.value} value={day.value}>
+                                  {day.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Horaire
+                            </label>
+                            <input
+                              type="time"
+                              value={course.time}
+                              onChange={(e) => {
+                                const newCourses = [...courses];
+                                newCourses[idx].time = e.target.value;
+                                setCourses(newCourses);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Adresse
+                            </label>
+                            <input
+                              type="text"
+                              value={course.locationName}
+                              onChange={(e) => {
+                                const newCourses = [...courses];
+                                newCourses[idx].locationName = e.target.value;
+                                setCourses(newCourses);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Lien Google Maps
+                            </label>
+                            <input
+                              type="url"
+                              value={course.mapsUrl}
+                              onChange={(e) => {
+                                const newCourses = [...courses];
+                                newCourses[idx].mapsUrl = e.target.value;
+                                setCourses(newCourses);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                              placeholder="https://maps.app.goo.gl/..."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {coachTab === "offers" && (
+                <div className="glass rounded-xl p-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    Gestion des offres
+                  </h2>
+                  <div className="space-y-6">
+                    {offers.map((offer, idx) => (
+                      <div key={offer.id} className="glass rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={offer.visible !== false}
+                              onChange={(e) => {
+                                const newOffers = [...offers];
+                                newOffers[idx].visible = e.target.checked;
+                                setOffers(newOffers);
+                              }}
+                              style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                            />
+                            <span 
+                              style={{ 
+                                color: config.text_color, 
+                                fontSize: `${config.font_size * 0.875}px`,
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              ✅ Visible au public
+                            </span>
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Nom de l'offre
+                            </label>
+                            <input
+                              type="text"
+                              value={offer.name}
+                              onChange={(e) => {
+                                const newOffers = [...offers];
+                                newOffers[idx].name = e.target.value;
+                                setOffers(newOffers);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                            />
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <label 
+                                className="block mb-2"
+                                style={{ 
+                                  color: config.text_color,
+                                  fontSize: `${config.font_size * 0.875}px`
+                                }}
+                              >
+                                Prix
+                              </label>
+                              <input
+                                type="number"
+                                value={offer.price}
+                                onChange={(e) => {
+                                  const newOffers = [...offers];
+                                  newOffers[idx].price = parseFloat(e.target.value) || 0;
+                                  setOffers(newOffers);
+                                }}
+                                className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                                style={{ 
+                                  color: config.text_color,
+                                  fontSize: `${config.font_size}px`,
+                                  borderColor: config.primary_color
+                                }}
+                              />
+                            </div>
+                            <span 
+                              className="pb-3"
+                              style={{ 
+                                color: config.text_color, 
+                                fontSize: `${config.font_size}px` 
+                              }}
+                            >
+                              CHF
+                            </span>
+                          </div>
+                          <div className="md:col-span-2">
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              URL de l'image miniature
+                            </label>
+                            <input
+                              type="url"
+                              value={offer.thumbnail || ""}
+                              onChange={(e) => {
+                                const newOffers = [...offers];
+                                newOffers[idx].thumbnail = e.target.value;
+                                setOffers(newOffers);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                              placeholder="https://..."
+                            />
+                            {offer.thumbnail && (
+                              <ImageWithDimensions imageUrl={offer.thumbnail} alt={`Miniature ${offer.name}`} config={config} />
+                            )}
+                          </div>
+                          <div className="md:col-span-2">
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Lien vidéo (YouTube/TikTok)
+                            </label>
+                            <input
+                              type="url"
+                              value={offer.videoUrl || ""}
+                              onChange={(e) => {
+                                const newOffers = [...offers];
+                                newOffers[idx].videoUrl = e.target.value;
+                                setOffers(newOffers);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                              placeholder="https://youtube.com/... ou https://tiktok.com/..."
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label 
+                              className="block mb-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              Description (150 caractères max)
+                            </label>
+                            <textarea
+                              value={offer.description || ""}
+                              maxLength={150}
+                              onChange={(e) => {
+                                const newOffers = [...offers];
+                                newOffers[idx].description = e.target.value;
+                                setOffers(newOffers);
+                              }}
+                              className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                              style={{ 
+                                color: config.text_color,
+                                fontSize: `${config.font_size}px`,
+                                borderColor: config.primary_color
+                              }}
+                              rows={3}
+                              placeholder="Description de l'offre..."
+                            />
+                            <div 
+                              className="text-right mt-1"
+                              style={{ 
+                                color: config.text_color,
+                                opacity: 0.5,
+                                fontSize: `${config.font_size * 0.75}px`
+                              }}
+                            >
+                              {(offer.description || "").length}/150
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {coachTab === "payments" && (
+                <div className="glass rounded-xl p-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    Configuration des paiements
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label 
+                        htmlFor="stripeLink"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Lien Stripe
+                      </label>
+                      <input
+                        id="stripeLink"
+                        type="url"
+                        value={paymentLinks.stripe}
+                        onChange={(e) => setPaymentLinks({...paymentLinks, stripe: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="paypalLink"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Lien PayPal
+                      </label>
+                      <input
+                        id="paypalLink"
+                        type="url"
+                        value={paymentLinks.paypal}
+                        onChange={(e) => setPaymentLinks({...paymentLinks, paypal: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="twintLink"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Lien Twint
+                      </label>
+                      <input
+                        id="twintLink"
+                        type="url"
+                        value={paymentLinks.twint}
+                        onChange={(e) => setPaymentLinks({...paymentLinks, twint: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="coachWhatsapp"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Numéro WhatsApp du coach
+                      </label>
+                      <input
+                        id="coachWhatsapp"
+                        type="tel"
+                        value={paymentLinks.coachWhatsapp}
+                        onChange={(e) => setPaymentLinks({...paymentLinks, coachWhatsapp: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                        placeholder="+41 XX XXX XX XX"
+                      />
+                      <p 
+                        className="mt-2"
+                        style={{ 
+                          color: config.text_color,
+                          opacity: 0.6,
+                          fontSize: `${config.font_size * 0.75}px`
+                        }}
+                      >
+                        💡 Ce numéro sera utilisé pour les notifications automatiques à chaque réservation
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {coachTab === "codes" && (
+                <div className="glass rounded-xl p-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    Gestion des codes promo
+                  </h2>
+
+                  <div className="mb-6 p-4 rounded-lg glass">
+                    <label 
+                      htmlFor="csvFileInput"
+                      className="block mb-2 font-semibold cursor-pointer"
+                      style={{ 
+                        color: config.text_color,
+                        fontSize: `${config.font_size}px`
+                      }}
+                    >
+                      📂 Import CSV de codes promo
+                    </label>
+                    <p 
+                      className="mb-3"
+                      style={{ 
+                        color: config.text_color,
+                        opacity: 0.7,
+                        fontSize: `${config.font_size * 0.875}px`
+                      }}
+                    >
+                      Format CSV : email,nom,valeur,type,expiration (optionnel)
+                    </p>
+                    <input
+                      id="csvFileInput"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleImportCodesCSV}
+                      className="w-full px-4 py-3 rounded-lg glass cursor-pointer"
+                      style={{ 
+                        color: config.text_color,
+                        fontSize: `${config.font_size}px`
+                      }}
+                    />
+                  </div>
+
+                  <form onSubmit={handleAddDiscountCode} className="mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Nom du code
+                        </label>
+                        <input
+                          type="text"
+                          value={newCodeName}
+                          onChange={(e) => setNewCodeName(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                          placeholder="NOEL2024 (auto si vide)"
+                        />
+                      </div>
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Type *
+                        </label>
+                        <select
+                          required
+                          value={newCodeType}
+                          onChange={(e) => setNewCodeType(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                        >
+                          <option value="">Type</option>
+                          <option value="CHF">CHF</option>
+                          <option value="100%">100% (Gratuit)</option>
+                          <option value="%">%</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Valeur *
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={newCodeValue}
+                          onChange={(e) => setNewCodeValue(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                          placeholder="10"
+                        />
+                      </div>
+                      <div>
+                        <label 
+                          htmlFor="codeEmailField"
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Email bénéficiaire
+                        </label>
+                        <input
+                          id="codeEmailField"
+                          type="email"
+                          list="existingEmails"
+                          value={newCodeAssignedEmail}
+                          onChange={(e) => setNewCodeAssignedEmail(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                          placeholder="email@example.com"
+                        />
+                        <datalist id="existingEmails">
+                          {Array.from(new Set(users.map(u => u.email))).map(email => (
+                            <option key={email} value={email} />
+                          ))}
+                        </datalist>
+                      </div>
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Date d'expiration
+                        </label>
+                        <input
+                          type="date"
+                          value={newCodeExpiresAt}
+                          onChange={(e) => setNewCodeExpiresAt(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Utilisations max
+                        </label>
+                        <input
+                          type="number"
+                          value={newCodeMaxUses}
+                          onChange={(e) => setNewCodeMaxUses(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                          placeholder="Illimité si vide"
+                        />
+                      </div>
+                      <div>
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Créer en lot (max 10)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={newCodeBulkCount}
+                          onChange={(e) => setNewCodeBulkCount(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label 
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          Cours autorisés
+                        </label>
+                        <select
+                          multiple
+                          value={newCodeCourses}
+                          onChange={(e) => {
+                            const selected = Array.from(e.target.selectedOptions, option => option.value);
+                            setNewCodeCourses(selected);
+                          }}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size * 0.875}px`,
+                            borderColor: config.primary_color,
+                            minHeight: '80px'
+                          }}
+                        >
+                          {courses.map(course => (
+                            <option key={course.id} value={course.id}>
+                              {course.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p 
+                          className="mt-1"
+                          style={{ 
+                            color: config.text_color,
+                            opacity: 0.6,
+                            fontSize: `${config.font_size * 0.75}px`
+                          }}
+                        >
+                          Ctrl+Clic pour sélectionner plusieurs
+                        </p>
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          type="submit"
+                          className="w-full px-4 py-3 rounded-lg btn-primary font-bold"
+                          style={{
+                            fontSize: `${config.font_size}px`
+                          }}
+                        >
+                          Ajouter
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="space-y-3">
+                    {discountCodes.map(code => (
+                      <div 
+                        key={code.id}
+                        className="p-4 rounded-lg glass"
+                      >
+                        <div className="mb-3">
+                          <span 
+                            className="font-bold block mb-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`
+                            }}
+                          >
+                            {code.code}
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            <span 
+                              style={{ 
+                                color: config.text_color,
+                                opacity: 0.8,
+                                fontSize: `${config.font_size * 0.875}px`
+                              }}
+                            >
+                              {code.type}: {code.value}
+                            </span>
+                            {code.assignedEmail && (
+                              <span 
+                                style={{ 
+                                  color: config.text_color,
+                                  opacity: 0.6,
+                                  fontSize: `${config.font_size * 0.75}px`
+                                }}
+                              >
+                                👤 {code.assignedEmail}
+                              </span>
+                            )}
+                            {code.expiresAt && (
+                              <span 
+                                style={{ 
+                                  color: config.text_color,
+                                  opacity: 0.6,
+                                  fontSize: `${config.font_size * 0.75}px`
+                                }}
+                              >
+                                📅 {new Date(code.expiresAt).toLocaleDateString('fr-CH')}
+                              </span>
+                            )}
+                            {code.maxUses && (
+                              <span 
+                                style={{ 
+                                  color: config.text_color,
+                                  opacity: 0.6,
+                                  fontSize: `${config.font_size * 0.75}px`
+                                }}
+                              >
+                                🔢 {code.used || 0}/{code.maxUses}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleCopyCode(code)}
+                            className="px-3 py-2 rounded-lg glass hover:neon-border transition-all min-w-[120px]"
+                            style={{
+                              color: config.text_color,
+                              fontSize: `${config.font_size * 0.875}px`
+                            }}
+                            title="Copier le code"
+                          >
+                            {copiedCode === code.id ? '✓ Copié !' : '📋 Copier'}
+                          </button>
+                          <button
+                            onClick={() => handleShareCodeWhatsApp(code)}
+                            className="px-3 py-2 rounded-lg glass hover:neon-border transition-all min-w-[120px]"
+                            style={{
+                              color: config.text_color,
+                              fontSize: `${config.font_size * 0.875}px`
+                            }}
+                            title="Partager sur WhatsApp"
+                          >
+                            📱 WhatsApp
+                          </button>
+                          <button
+                            onClick={() => toggleCodeActive(code.id)}
+                            className={`px-3 py-2 rounded-lg font-medium transition-all flex-1 min-w-[120px] ${
+                              code.active ? 'neon-border' : 'glass'
+                            }`}
+                            style={{
+                              color: config.text_color,
+                              fontSize: `${config.font_size * 0.875}px`,
+                              background: code.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'
+                            }}
+                          >
+                            {code.active ? '✅ Actif' : '❌ Inactif'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {discountCodes.length === 0 && (
+                      <p className="text-center py-8" style={{ color: config.text_color, opacity: 0.6, fontSize: `${config.font_size}px` }}>
+                        Aucun code promo configuré
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
       }
 
-      // --- (le reste de ton rendu UI reste identique, inchangé) ---
-      // IMPORTANT: pour l'étape 1 (déploiement), on n'a besoin que d'une app qui s'affiche sans écran blanc.
-      // Tu gardes ton UI. On améliorera la logique login coach à l'étape 2.
+
+  
+const handleValidateCode = () => {
+  const savedCode = localStorage.getItem("coachLoginCode");
+  const expiresAt = parseInt(localStorage.getItem("coachLoginExpires") || "0", 10);
+  const now = Date.now();
+
+  if (!savedCode || !expiresAt) {
+    setLoginError("Aucun code trouvé. Demande un nouveau code.");
+    return;
+  }
+
+  if (now > expiresAt) {
+    setLoginError("Le code a expiré. Demande un nouveau code.");
+    localStorage.removeItem("coachLoginCode");
+    localStorage.removeItem("coachLoginExpires");
+    return;
+  }
+
+  if (loginCode !== savedCode) {
+    setLoginError("Code incorrect");
+    return;
+  }
+
+  // ✅ Connexion validée
+  localStorage.setItem("isCoachLoggedIn", "true");
+  localStorage.removeItem("coachLoginCode");
+  localStorage.removeItem("coachLoginExpires");
+
+  setCoachMode(true);
+  setShowCoachLogin(false);
+  setLoginError("");
+};
 
       const visibleOffers = offers.filter(o => o.visible !== false);
       const uniqueUsers = Array.from(new Map(users.map(u => [u.email, u])).values());
@@ -1266,17 +2501,771 @@ Cette réservation est confirmée.`;
             fontFamily: `${config.font_family}, system-ui, sans-serif`
           }}
         >
-          {/* UI inchangée (copie de ton code original) */}
-          {/* ... */}
+          {showPwaPrompt && (
+            <div 
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999,
+                padding: '20px'
+              }}
+              onClick={handleDismissPwa}
+            >
+              <div 
+                className="glass rounded-xl p-8 max-w-md w-full neon-border"
+                style={{
+                  animation: 'slideIn 0.3s ease-out'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div 
+                  style={{ 
+                    fontSize: `${config.font_size * 2.5}px`,
+                    textAlign: 'center',
+                    marginBottom: '16px'
+                  }}
+                >
+                  ✨
+                </div>
+                <h2 
+                  className="font-bold mb-4 text-center"
+                  style={{ 
+                    color: config.text_color,
+                    fontSize: `${config.font_size * 1.5}px`
+                  }}
+                >
+                  Installer l'application Afroboost ?
+                </h2>
+                <p 
+                  className="mb-6 text-center"
+                  style={{ 
+                    color: config.text_color,
+                    opacity: 0.8,
+                    fontSize: `${config.font_size}px`
+                  }}
+                >
+                  Pour accéder plus vite au planning et aux réservations.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleInstallPwa}
+                    className="btn-primary flex-1 py-3 rounded-lg font-bold"
+                    style={{ 
+                      fontSize: `${config.font_size}px`
+                    }}
+                  >
+                    Installer maintenant
+                  </button>
+                  <button
+                    onClick={handleDismissPwa}
+                    className="flex-1 py-3 rounded-lg glass hover:neon-border transition-all"
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size}px`
+                    }}
+                  >
+                    Plus tard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showConfirmPayment && (
+            <div 
+              className="success-overlay"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowConfirmPayment(false);
+                  setPendingReservation(null);
+                }
+              }}
+            >
+              <div 
+                className="success-message glass rounded-xl p-6 max-w-md w-full text-center neon-border"
+                style={{ 
+                  borderColor: config.primary_color,
+                  color: config.text_color,
+                  background: 'rgba(139, 92, 246, 0.2)'
+                }}
+              >
+                <div style={{ fontSize: `${config.font_size * 2}px`, marginBottom: '12px' }}>💳</div>
+                <p style={{ fontSize: `${config.font_size * 1.125}px`, fontWeight: 'bold', marginBottom: '16px' }}>
+                  Paiement effectué ?
+                </p>
+                <p style={{ fontSize: `${config.font_size}px`, marginBottom: '24px', opacity: 0.8 }}>
+                  Une fois le paiement terminé, clique sur le bouton ci-dessous pour confirmer ta réservation.
+                </p>
+                <button
+                  onClick={confirmReservation}
+                  className="w-full btn-primary py-3 rounded-lg font-bold mb-3"
+                  style={{
+                    fontSize: `${config.font_size}px`
+                  }}
+                >
+                  ✅ Confirmer mon paiement
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmPayment(false);
+                    setPendingReservation(null);
+                  }}
+                  className="w-full py-2 rounded-lg glass hover:neon-border transition-all"
+                  style={{
+                    color: config.text_color,
+                    fontSize: `${config.font_size * 0.875}px`
+                  }}
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showSuccess && (
+            <div 
+              className="success-overlay"
+            >
+              <div 
+                className="success-message glass rounded-xl p-6 max-w-md w-full text-center neon-border print-proof"
+                style={{ 
+                  borderColor: config.primary_color,
+                  color: config.text_color,
+                  background: 'rgba(217, 28, 210, 0.2)',
+                  position: 'relative'
+                }}
+              >
+                <button
+                  onClick={() => setShowSuccess(false)}
+                  className="glass hover:neon-border transition-all"
+                  style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    color: config.text_color,
+                    fontSize: `${config.font_size * 1.5}px`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold',
+                    lineHeight: '1'
+                  }}
+                  title="Fermer"
+                >
+                  ×
+                </button>
+                <div style={{ fontSize: `${config.font_size * 2}px`, marginBottom: '12px' }}>🎧</div>
+                <p style={{ fontSize: `${config.font_size * 1.125}px`, fontWeight: 'bold', marginBottom: '8px' }}>
+                  Ta réservation de casque est confirmée !
+                </p>
+                {lastReservationCode && (
+                  <div 
+                    className="my-4 p-4 rounded-lg"
+                    style={{ 
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      border: `2px dashed ${config.primary_color}`
+                    }}
+                  >
+                    <p 
+                      style={{ 
+                        fontSize: `${config.font_size * 0.875}px`, 
+                        marginBottom: '8px',
+                        opacity: 0.8
+                      }}
+                    >
+                      🎫 Ton code de réservation :
+                    </p>
+                    <p 
+                      style={{ 
+                        fontSize: `${config.font_size * 1.5}px`, 
+                        fontWeight: 'bold',
+                        letterSpacing: '2px'
+                      }}
+                    >
+                      {lastReservationCode}
+                    </p>
+                  </div>
+                )}
+                <div className="my-4" style={{opacity: 0.8, fontSize: `${config.font_size * 0.875}px`}}>
+                  <p><strong>Nom :</strong> {lastBookedName}</p>
+                  <p><strong>Email :</strong> {lastBookedEmail}</p>
+                  <p><strong>Cours :</strong> {lastBookedCourse}</p>
+                  <p><strong>Offre :</strong> {lastBookedOffer}</p>
+                  <p><strong>Montant :</strong> CHF {lastBookedPrice}</p>
+                  <p><strong>Date :</strong> {lastBookedDate}</p>
+                </div>
+                <p style={{ fontSize: `${config.font_size}px`, marginBottom: '16px' }}>
+                  Tu recevras les infos par ton coach Afroboost.
+                </p>
+                <div className="flex gap-3 justify-center flex-wrap mb-4">
+                  <button
+                    onClick={handlePrintProof}
+                    className="px-4 py-2 rounded-lg glass hover:neon-border transition-all"
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 0.875}px`,
+                      cursor: 'pointer',
+                      border: 'none'
+                    }}
+                  >
+                    🖨️ Imprimer
+                  </button>
+                  <button
+                    onClick={handleShareWhatsApp}
+                    className="px-4 py-2 rounded-lg glass hover:neon-border transition-all"
+                    style={{
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 0.875}px`,
+                      cursor: 'pointer',
+                      border: 'none'
+                    }}
+                  >
+                    📱 Partager
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="max-w-4xl mx-auto">
-            {/* (Ton UI complet est conservé tel quel) */}
-            {/* Pour éviter un message gigantesque ici, je garde l'étape 1 focalisée sur le déploiement stable. */}
-            {/* Étape suivante: je te redonne le fichier complet à 100% si tu confirmes OK. */}
-            <div className="glass rounded-xl p-6" style={{ color: config.text_color }}>
-              <p style={{ margin: 0 }}>
-                ✅ Build Vercel prêt. Prochaine action après ton OK : je te fournis le fichier COMPLET (UI entière) sans coupure.
+            <div className="flex justify-between items-center mb-4">
+              <button 
+                onClick={handleLangRotation}
+                className="w-10 h-10 flex items-center justify-center rounded-full glass hover:neon-border transition-all"
+                title="Changer de langue"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              </button>
+            </div>
+
+            <div className="text-center mb-8">
+              <h1 
+                className="font-bold mb-2"
+                style={{ 
+                  color: config.text_color,
+                  fontSize: `${config.font_size * 2.5}px`
+                }}
+              >
+                {config.app_title}
+              </h1>
+              <p 
+                className="mb-4"
+                style={{ 
+                  color: config.text_color,
+                  opacity: 0.8,
+                  fontSize: `${config.font_size * 1.125}px`
+                }}
+              >
+                {t("title")}
+              </p>
+              <p 
+                className="concept-glow max-w-2xl mx-auto"
+                style={{ 
+                  color: '#cbd5e1',
+                  fontSize: `${config.font_size * 0.875}px`,
+                  lineHeight: '1.6'
+                }}
+              >
+                {concept.description}
               </p>
             </div>
+
+            <div className="mb-8">
+              {concept.heroVideoUrl ? (
+                <div className="glass rounded-xl p-4 neon-border">
+                  <a
+                    href={concept.heroVideoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center py-8 hover:scale-105 transition-transform"
+                    style={{
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <div 
+                      className="inline-flex items-center justify-center mb-3"
+                      style={{
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        background: `linear-gradient(135deg, ${config.primary_color}, ${config.secondary_color})`,
+                        boxShadow: `0 0 30px rgba(217, 28, 210, 0.6)`
+                      }}
+                    >
+                      <span style={{ fontSize: '40px' }}>▶</span>
+                    </div>
+                    <p 
+                      className="font-bold"
+                      style={{ 
+                        color: config.text_color,
+                        fontSize: `${config.font_size * 1.125}px`
+                      }}
+                    >
+                      🎥 Découvre le concept en vidéo
+                    </p>
+                    <p 
+                      style={{ 
+                        color: config.text_color,
+                        opacity: 0.7,
+                        fontSize: `${config.font_size * 0.875}px`,
+                        marginTop: '8px'
+                      }}
+                    >
+                      Clique pour regarder
+                    </p>
+                  </a>
+                </div>
+              ) : concept.heroImageUrl ? (
+                <div className="glass rounded-xl overflow-hidden neon-border">
+                  <img 
+                    src={concept.heroImageUrl} 
+                    alt="Visuel Afroboost"
+                    className="w-full"
+                    style={{ 
+                      height: '400px',
+                      objectFit: 'cover',
+                      display: 'block'
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = `
+                        <div style="padding: 60px 20px; text-align: center; color: ${config.text_color}; opacity: 0.6;">
+                          <p style="font-size: ${config.font_size}px;">❌ Impossible de charger l'image</p>
+                        </div>
+                      `;
+                    }}
+                  />
+                </div>
+              ) : (
+                <div 
+                  className="glass rounded-xl p-12 text-center"
+                  style={{
+                    background: `linear-gradient(135deg, rgba(217, 28, 210, 0.1), rgba(139, 92, 246, 0.1))`,
+                    borderStyle: 'dashed',
+                    borderWidth: '2px',
+                    borderColor: 'rgba(148, 27, 181, 0.4)'
+                  }}
+                >
+                  <div 
+                    style={{ 
+                      fontSize: `${config.font_size * 3}px`,
+                      marginBottom: '16px',
+                      opacity: 0.5
+                    }}
+                  >
+                    🖼️
+                  </div>
+                  <p 
+                    style={{ 
+                      color: config.text_color,
+                      opacity: 0.7,
+                      fontSize: `${config.font_size}px`
+                    }}
+                  >
+                    Ajoute ton visuel d'accueil dans le Mode Coach
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-8">
+              <h2 
+                className="font-semibold mb-4"
+                style={{ 
+                  color: config.text_color,
+                  fontSize: `${config.font_size * 1.5}px`
+                }}
+              >
+                {t("chooseSession")}
+              </h2>
+              <div className="space-y-4">
+                {courses.map(course => (
+                  <div
+                    key={course.id}
+                    className={`course-card glass rounded-xl p-5 ${
+                      selectedCourse?.id === course.id ? 'selected' : ''
+                    }`}
+                  >
+                    <h3 
+                      className="font-semibold mb-2"
+                      style={{ 
+                        color: config.text_color,
+                        fontSize: `${config.font_size * 1.125}px`
+                      }}
+                    >
+                      {course.name}
+                    </h3>
+                    <p 
+                      className="mb-3"
+                      style={{ 
+                        color: config.text_color,
+                        opacity: 0.7,
+                        fontSize: `${config.font_size * 0.875}px`
+                      }}
+                    >
+                      📍 {course.locationName}
+                    </p>
+                    {renderCourseDates(course)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {selectedCourse && selectedDate && (
+              <div className="mb-8">
+                <h2 
+                  className="font-semibold mb-4"
+                  style={{ 
+                    color: config.text_color,
+                    fontSize: `${config.font_size * 1.5}px`
+                  }}
+                >
+                  {config.choose_offer_text}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {visibleOffers.map(offer => (
+                    <div
+                      key={offer.id}
+                      onClick={() => setSelectedOffer(offer)}
+                      className={`offer-card glass rounded-xl p-5 text-center ${
+                        selectedOffer?.id === offer.id ? 'selected' : ''
+                      }`}
+                    >
+                      {offer.thumbnail && (
+                        <img 
+                          src={offer.thumbnail} 
+                          alt={offer.name}
+                          className="offer-thumbnail"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <h3 
+                        className="font-semibold mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size * 1.125}px`
+                        }}
+                      >
+                        {offer.name}
+                      </h3>
+                      <p 
+                        className="font-bold mb-4"
+                        style={{ 
+                          color: config.primary_color,
+                          fontSize: `${config.font_size * 1.875}px`
+                        }}
+                      >
+                        CHF {offer.price}.-
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedOffer && (
+              <form onSubmit={handlePaymentClick}>
+                <div className="glass rounded-xl p-6 mb-6">
+                  <h2 
+                    className="font-semibold mb-4"
+                    style={{ 
+                      color: config.text_color,
+                      fontSize: `${config.font_size * 1.5}px`
+                    }}
+                  >
+                    {config.user_info_text}
+                  </h2>
+
+                  <div className="mb-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isExistingUser}
+                        onChange={(e) => {
+                          setIsExistingUser(e.target.checked);
+                          setSelectedUserId("");
+                          setUserName("");
+                          setUserEmail("");
+                          setUserWhatsapp("");
+                        }}
+                        style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                      />
+                      <span style={{ color: config.text_color, fontSize: `${config.font_size}px` }}>
+                        Je suis déjà abonné
+                      </span>
+                    </label>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {isExistingUser ? (
+                      <div>
+                        <label 
+                          htmlFor="existingUser"
+                          className="block mb-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`
+                          }}
+                        >
+                          Sélectionnez votre profil
+                        </label>
+                        <select
+                          id="existingUser"
+                          required
+                          value={selectedUserId}
+                          onChange={(e) => setSelectedUserId(e.target.value)}
+                          className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                          style={{ 
+                            color: config.text_color,
+                            fontSize: `${config.font_size}px`,
+                            borderColor: config.primary_color
+                          }}
+                        >
+                          <option value="">Choisissez...</option>
+                          {uniqueUsers.map(user => (
+                            <option key={user.id} value={user.id}>
+                              {user.name} ({user.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label 
+                            htmlFor="userName"
+                            className="block mb-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`
+                            }}
+                          >
+                            Nom complet
+                          </label>
+                          <input
+                            id="userName"
+                            type="text"
+                            required
+                            value={userName}
+                            onChange={(e) => setUserName(e.target.value)}
+                            className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`,
+                              borderColor: config.primary_color
+                            }}
+                            placeholder="Votre nom"
+                          />
+                        </div>
+
+                        <div>
+                          <label 
+                            htmlFor="userEmail"
+                            className="block mb-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`
+                            }}
+                          >
+                            Email
+                          </label>
+                          <input
+                            id="userEmail"
+                            type="email"
+                            required
+                            value={userEmail}
+                            onChange={(e) => setUserEmail(e.target.value)}
+                            className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`,
+                              borderColor: config.primary_color
+                            }}
+                            placeholder="votre@email.com"
+                          />
+                        </div>
+
+                        <div>
+                          <label 
+                            htmlFor="userWhatsapp"
+                            className="block mb-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`
+                            }}
+                          >
+                            Numéro WhatsApp
+                          </label>
+                          <input
+                            id="userWhatsapp"
+                            type="tel"
+                            value={userWhatsapp}
+                            onChange={(e) => setUserWhatsapp(e.target.value)}
+                            className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                            style={{ 
+                              color: config.text_color,
+                              fontSize: `${config.font_size}px`,
+                              borderColor: config.primary_color
+                            }}
+                            placeholder="+41 XX XXX XX XX"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label 
+                        htmlFor="discountCode"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Code promo (optionnel)
+                      </label>
+                      <input
+                        id="discountCode"
+                        type="text"
+                        value={discountCode}
+                        onChange={(e) => setDiscountCode(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.secondary_color
+                        }}
+                        placeholder="Entrez votre code"
+                      />
+                      {codeValidationMessage && (
+                        <p 
+                          className="mt-2"
+                          style={{ 
+                            color: '#ef4444',
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          {codeValidationMessage}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label 
+                        htmlFor="quantity"
+                        className="block mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`
+                        }}
+                      >
+                        Quantité
+                      </label>
+                      <input
+                        id="quantity"
+                        type="number"
+                        min="1"
+                        required
+                        value={quantity}
+                        onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                        className="w-full px-4 py-3 rounded-lg glass focus:outline-none focus:ring-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size}px`,
+                          borderColor: config.primary_color
+                        }}
+                      />
+                    </div>
+
+                    <div 
+                      className="p-4 rounded-lg"
+                      style={{ 
+                        background: 'rgba(139, 92, 246, 0.2)',
+                        borderLeft: `4px solid ${config.secondary_color}`
+                      }}
+                    >
+                      <p 
+                        className="font-bold mb-2"
+                        style={{ 
+                          color: config.text_color,
+                          fontSize: `${config.font_size * 1.125}px`
+                        }}
+                      >
+                        💵 Total à payer : CHF {isGratuit ? "0.00" : (selectedOffer.price * quantity).toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={hasAcceptedTerms}
+                          onChange={(e) => setHasAcceptedTerms(e.target.checked)}
+                          style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            cursor: 'pointer',
+                            marginTop: '2px'
+                          }}
+                        />
+                        <span 
+                          style={{ 
+                            color: config.text_color, 
+                            fontSize: `${config.font_size * 0.875}px`
+                          }}
+                        >
+                          J'accepte les conditions générales d'utilisation d'Afroboost
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!hasAcceptedTerms}
+                  className="btn-primary w-full py-4 rounded-xl text-white font-bold"
+                  style={{ 
+                    fontSize: `${config.font_size * 1.125}px`,
+                    opacity: hasAcceptedTerms ? 1 : 0.5,
+                    cursor: hasAcceptedTerms ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  {isGratuit ? "Réserver gratuitement" : "💳 Payer et réserver"}
+                </button>
+              </form>
+            )}
+
+            <footer 
+              className="mt-12 mb-8 text-center"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onDoubleClick={() => {
+                if (localStorage.getItem("isCoachLoggedIn") === "true") {
+                  setCoachMode(true);
+                } else {
+                  setShowCoachLogin(true);
+                }
+              }}
+            >
+              <p style={{ color: config.text_color, opacity: 0.5, fontSize: `${config.font_size * 0.875}px` }}>
+                © Afroboost 2026
+              </p>
+            </footer>
           </div>
         </div>
       );
